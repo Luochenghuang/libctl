@@ -10,7 +10,8 @@ nodist_include_HEADERS = ctlgeom-types.h
 lib_LTLIBRARIES = libctlgeom.la
 noinst_PROGRAMS = geomtst
 
-EXTRA_DIST = gen-ctl-io.in README geom.scm geom-ctl-io-defaults.c nlopt.c
+EXTRA_DIST = gen-ctl-io.in README geom.scm geom-ctl-io-defaults.c nlopt.c \
+             test-lifecycle-hooks.sh lifecycle-hooks-spec.scm
 
 libctlgeom_la_SOURCES = geom.c $(top_srcdir)/src/ctl-math.c $(top_srcdir)/src/integrator.c geom-ctl-io.c ctlgeom-types.h
 libctlgeom_la_LDFLAGS = -version-info @SHARED_VERSION_INFO@
@@ -31,6 +32,9 @@ test_mesh_LDADD   = libctlgeom.la
 test_mesh_CPPFLAGS = -I$(top_srcdir)/src
 
 TESTS = test-prism test-mesh
+if WITH_GUILE
+TESTS += test-lifecycle-hooks.sh
+endif
 
 dist_man_MANS = gen-ctl-io.1
 
