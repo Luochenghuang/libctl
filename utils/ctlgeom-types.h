@@ -129,6 +129,7 @@ extern boolean ensure_periodicity;
 
 /******* class copy function prototypes *******/
 
+extern void mesh_after_copy(mesh *);
 extern void lattice_copy(const lattice *o0,lattice *o);
 extern void ellipsoid_copy(const ellipsoid *o0,ellipsoid *o);
 extern void mesh_copy(const mesh *o0,mesh *o);
@@ -157,6 +158,7 @@ extern boolean geometric_object_equal(const geometric_object *o0, const geometri
 
 /******* class destruction function prototypes *******/
 
+extern void mesh_after_destroy(mesh *);
 extern void lattice_destroy(lattice o);
 extern void ellipsoid_destroy(ellipsoid o);
 extern void mesh_destroy(mesh o);
