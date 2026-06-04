@@ -47,6 +47,9 @@ ellipsoid_copy(const ellipsoid * o0, ellipsoid * o)
 	o->inverse_semi_axes = o0->inverse_semi_axes;
 }
 
+/* Defined in geom.c; eagerly rebuilds the opaque mesh_internal cache. */
+extern void mesh_init_internal(mesh *m);
+
 void
 mesh_copy(const mesh * o0, mesh * o)
 {
@@ -58,21 +61,17 @@ mesh_copy(const mesh * o0, mesh * o)
 			o->vertices.items[i_t] = o0->vertices.items[i_t];
 		}
 	}
-	o->num_faces = o0->num_faces;
-	o->face_indices = (int *) malloc(sizeof(int) * 3 * o->num_faces);
-	memcpy(o->face_indices, o0->face_indices, sizeof(int) * 3 * o->num_faces);
-	o->face_normals = (vector3 *) malloc(sizeof(vector3) * o->num_faces);
-	memcpy(o->face_normals, o0->face_normals, sizeof(vector3) * o->num_faces);
-	o->face_areas = (number *) malloc(sizeof(number) * o->num_faces);
-	memcpy(o->face_areas, o0->face_areas, sizeof(number) * o->num_faces);
-	o->num_bvh_nodes = o0->num_bvh_nodes;
-	o->bvh = (mesh_bvh_node *) malloc(sizeof(mesh_bvh_node) * o->num_bvh_nodes);
-	memcpy(o->bvh, o0->bvh, sizeof(mesh_bvh_node) * o->num_bvh_nodes);
-	o->bvh_face_ids = (int *) malloc(sizeof(int) * o->num_faces);
-	memcpy(o->bvh_face_ids, o0->bvh_face_ids, sizeof(int) * o->num_faces);
+	{
+		int		i_t;
+		o->face_indices.num_items = o0->face_indices.num_items;
+		o->face_indices.items = ((vector3 *) malloc(sizeof(vector3) * (o->face_indices.num_items)));
+		for (i_t = 0; i_t < o->face_indices.num_items; i_t++) {
+			o->face_indices.items[i_t] = o0->face_indices.items[i_t];
+		}
+	}
 	o->is_closed = o0->is_closed;
-	o->centroid = o0->centroid;
-	o->lengthscale = o0->lengthscale;
+	o->internal = NULL;
+	mesh_init_internal(o);  /* rebuild BVH eagerly; safe under later concurrent queries */
 }
 
 void
@@ -130,14 +129,6 @@ prism_copy(const prism * o0, prism * o)
 		}
 	}
 	o->centroid = o0->centroid;
-	{
-		int		i_t;
-		o->workspace.num_items = o0->workspace.num_items;
-		o->workspace.items = ((number *) malloc(sizeof(number) * (o->workspace.num_items)));
-		for (i_t = 0; i_t < o->workspace.num_items; i_t++) {
-			o->workspace.items[i_t] = o0->workspace.items[i_t];
-		}
-	}
 	o->m_c2p = o0->m_c2p;
 	o->m_p2c = o0->m_p2c;
 }
@@ -293,15 +284,17 @@ mesh_equal(const mesh * o0, const mesh * o)
 				return 0;
 		}
 	}
-	if (o->num_faces != o0->num_faces)
-		return 0;
 	{
 		int		i_t;
-		for (i_t = 0; i_t < 3 * o->num_faces; i_t++) {
-			if (o->face_indices[i_t] != o0->face_indices[i_t])
+		if (o->face_indices.num_items != o0->face_indices.num_items)
+			return 0;
+		for (i_t = 0; i_t < o->face_indices.num_items; i_t++) {
+			if (!vector3_equal(o->face_indices.items[i_t], o0->face_indices.items[i_t]))
 				return 0;
 		}
 	}
+	if (o->is_closed != o0->is_closed)
+		return 0;
 	;
 	return 1;
 }
@@ -371,15 +364,6 @@ prism_equal(const prism * o0, const prism * o)
 	}
 	if (!vector3_equal(o->centroid, o0->centroid))
 		return 0;
-	{
-		int		i_t;
-		if (o->workspace.num_items != o0->workspace.num_items)
-			return 0;
-		for (i_t = 0; i_t < o->workspace.num_items; i_t++) {
-			if (o->workspace.items[i_t] != o0->workspace.items[i_t])
-				return 0;
-		}
-	}
 	if (!matrix3x3_equal(o->m_c2p, o0->m_c2p))
 		return 0;
 	if (!matrix3x3_equal(o->m_p2c, o0->m_p2c))
@@ -523,15 +507,15 @@ ellipsoid_destroy(ellipsoid o)
 {
 }
 
+/* Defined in geom.c; frees the opaque mesh_internal cache. Safe on NULL. */
+extern void mesh_internal_free(void *p);
+
 void
 mesh_destroy(mesh o)
 {
 	free(o.vertices.items);
-	free(o.face_indices);
-	free(o.face_normals);
-	free(o.face_areas);
-	free(o.bvh);
-	free(o.bvh_face_ids);
+	free(o.face_indices.items);
+	mesh_internal_free(o.internal);
 }
 
 void
@@ -573,12 +557,6 @@ prism_destroy(prism o)
 		}
 	}
 	free(o.vertices_top.items);
-	{
-		int		index_t;
-		for (index_t = 0; index_t < o.workspace.num_items; index_t++) {
-		}
-	}
-	free(o.workspace.items);
 }
 
 void 
