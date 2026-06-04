@@ -17,7 +17,6 @@ noinst_PROGRAMS = geomtst
 # build WITHOUT_GUILE from a tarball. Building WITHOUT_GUILE from a
 # git clone is not supported.
 EXTRA_DIST = gen-ctl-io.in README geom.scm geom-ctl-io-defaults.c nlopt.c \
-             test-lifecycle-hooks.sh lifecycle-hooks-spec.scm \
              geom-ctl-io.c ctlgeom-types.h
 
 libctlgeom_la_SOURCES = geom.c $(top_srcdir)/src/ctl-math.c $(top_srcdir)/src/integrator.c
@@ -40,9 +39,6 @@ test_mesh_LDADD   = libctlgeom.la
 test_mesh_CPPFLAGS = -I$(top_srcdir)/src
 
 TESTS = test-prism test-mesh
-if WITH_GUILE
-TESTS += test-lifecycle-hooks.sh
-endif
 
 dist_man_MANS = gen-ctl-io.1
 
