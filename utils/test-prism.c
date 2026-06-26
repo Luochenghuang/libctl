@@ -284,9 +284,13 @@ int test_point_inclusion(geometric_object the_block, geometric_object the_prism,
   // latter calls geom_fix_object_ptr internally and is not thread-safe.
   // the_block and the_prism were fixed up in run_unit_tests above
   // before this parallel loop runs.
+  // Pre-generate inputs serially so the random sequence (and the test outcome)
+  // is reproducible and independent of the OpenMP thread count.
+  vector3 *pts = (vector3 *)malloc(num_tests * sizeof(vector3));
+  for (n = 0; n < num_tests; n++) pts[n] = random_point_in_box(min_corner, max_corner);
 #pragma omp parallel for schedule(dynamic) reduction(+ : num_failed, num_adjusted)
   for (n = 0; n < num_tests; n++) {
-    vector3 p = random_point_in_box(min_corner, max_corner);
+    vector3 p = pts[n];
     boolean in_block = point_in_fixed_objectp(p, the_block);
     boolean in_prism = point_in_fixed_objectp(p, the_prism);
 
@@ -304,6 +308,7 @@ int test_point_inclusion(geometric_object the_block, geometric_object the_prism,
     }
   }
   if (f) fclose(f);
+  free(pts);
 
   printf("point inclusion: %i/%i points failed (%i adjusted)\n", num_failed, num_tests,
          num_adjusted);
@@ -365,13 +370,23 @@ int test_line_segment_intersection(geometric_object the_block, geometric_object 
 
   int num_failed = 0;
   int n;
+  // Pre-generate inputs serially so the random sequence (and the test outcome)
+  // is reproducible and independent of the OpenMP thread count.
+  typedef struct {
+    vector3 p, d;
+    double a, b;
+  } seg_input;
+  seg_input *in = (seg_input *)malloc(num_tests * sizeof(seg_input));
+  for (n = 0; n < num_tests; n++) {
+    in[n].p = random_point_in_box(min_corner, max_corner); // base point in enlarged bbox
+    in[n].d = random_unit_vector3();
+    in[n].a = urand(0.0, 1.0);
+    in[n].b = urand(0.0, 1.0);
+  }
 #pragma omp parallel for schedule(dynamic) reduction(+ : num_failed)
   for (n = 0; n < num_tests; n++) {
-    // randomly generated base point within enlarged bounding box
-    vector3 p = random_point_in_box(min_corner, max_corner);
-    vector3 d = random_unit_vector3();
-    double a = urand(0.0, 1.0);
-    double b = urand(0.0, 1.0);
+    vector3 p = in[n].p, d = in[n].d;
+    double a = in[n].a, b = in[n].b;
 
     double sblock = intersect_line_segment_with_object(p, d, the_block, a, b);
     double sprism = intersect_line_segment_with_object(p, d, the_prism, a, b);
@@ -392,6 +407,7 @@ int test_line_segment_intersection(geometric_object the_block, geometric_object 
     }
   }
   if (f) fclose(f);
+  free(in);
 
   printf("%i/%i segments failed\n", num_failed, num_tests);
   return num_failed;
@@ -1209,7 +1225,10 @@ void usage(char *msg) { print_usage(msg, 1); }
 /************************************************************************/
 /************************************************************************/
 int main(int argc, char *argv[]) {
-  srand(time(NULL));
+  // Fixed seed makes runs reproducible and avoids spurious failures from
+  // unlucky draws; override with TEST_PRISM_SEED to fuzz / reproduce a failure.
+  char *seed_env = getenv("TEST_PRISM_SEED");
+  srand(seed_env ? (unsigned)strtoul(seed_env, NULL, 0) : 314159u);
   geom_initialize();
 
   if (argc <= 1) // if no arguments, run unit tests
